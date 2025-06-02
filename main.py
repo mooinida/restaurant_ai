@@ -1,15 +1,27 @@
-from fastapi import FastAPI
-from routers import restaurants,reviews,qa
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from services.qa_service import build_knowledge_base, ask
 
-app=FastAPI(title="식당 추천 & QA API")
+app = FastAPI()
 
-#각 라우터 등록
-app.include_router(restaurants.router,prefix="/restaurants")
-app.include_router(reviews.router,prefix="/reviews")
-app.include_router(qa.router,prefix="/qa")
+# CORS 설정 (React 연결 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 배포 시엔 특정 도메인만 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-#서버 시작 시 LangChain QA 시스템 초기화 
-@app.on_event("startup") # startup 이벤트는 서버가 실행되자마자 딱 한번 실행됨
-async def startup_event(): 
-    from services.qa_service import build_knowledge_base # 이 함수는 LangChain 기반 질의응답 시스템을 초기화하는 역할을 한다.
+class Question(BaseModel):
+    question: str
+
+@app.on_event("startup")
+def startup_event():
     build_knowledge_base()
+
+@app.post("/api/ask")
+def ask_route(q: Question):
+    answer = ask(q.question)
+    return {"answer": answer}
